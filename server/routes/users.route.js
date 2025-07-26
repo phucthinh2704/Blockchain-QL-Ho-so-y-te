@@ -1,47 +1,55 @@
 const express = require("express");
 const router = express.Router();
-const userController = require("../controllers/userController");
 const { authenticateToken, authorize } = require("../middlewares/auth");
+const {
+	registerUser,
+	getUserById,
+	getUsers,
+	getDoctors,
+	getPatients,
+	updateUser,
+	deleteUser,
+} = require("../controllers/userController");
 
+// 1. Đăng ký user mới (public - không cần auth)
+router.post("/register", registerUser);
 
-/**
- * @route GET /api/users/profile
- * @desc Get current user profile
- */
-router.get("/profile", authenticateToken, userController.getProfile);
+// 2. Lấy danh sách users (chỉ admin)
+router.get("/", authenticateToken, authorize(["admin"]), getUsers);
 
-/**
- * @route PUT /api/users/profile
- * @desc Update user profile
- */
-router.put("/profile", authenticateToken, userController.updateProfile);
+// 3. Lấy danh sách bác sĩ (patient, doctor, admin có thể xem)
+router.get(
+	"/doctors",
+	authenticateToken,
+	authorize(["patient", "doctor", "admin"]),
+	getDoctors
+);
 
-/**
- * @route GET /api/users/doctors
- * @desc Get list of doctors (for patients)
- */
-router.get("/doctors", authenticateToken, userController.getDoctors);
-
-/**
- * @route GET /api/users/patients
- * @desc Get doctor's patients list
- */
+// 4. Lấy danh sách bệnh nhân (chỉ doctor và admin)
 router.get(
 	"/patients",
 	authenticateToken,
-	authorize(["doctor", "hospital"]),
-	userController.getPatients
+	authorize(["doctor", "admin"]),
+	getPatients
 );
 
-/**
- * @route GET /api/users/:userId
- * @desc Get user details (restricted)
- */
+// 5. Lấy thông tin user theo ID (tất cả roles đã đăng nhập)
 router.get(
 	"/:userId",
 	authenticateToken,
-	authorize(["doctor", "admin"]),
-	userController.getUserById
+	authorize(["patient", "doctor", "admin"]),
+	getUserById
 );
+
+// 6. Cập nhật thông tin user (user chính họ hoặc admin)
+router.put(
+	"/:userId",
+	authenticateToken,
+	authorize(["patient", "doctor", "admin"]),
+	updateUser
+);
+
+// 7. Xóa user (chỉ admin)
+router.delete("/:userId", authenticateToken, authorize(["admin"]), deleteUser);
 
 module.exports = router;

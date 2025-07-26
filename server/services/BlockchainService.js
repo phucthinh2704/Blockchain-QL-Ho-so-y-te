@@ -1,6 +1,6 @@
 const Blockchain = require("../blockchain/Blockchain");
-const BlockchainTransaction = require("../models/BlockchainTransaction");
-const MedicalRecord = require("../models/MedicalRecord");
+const Transaction = require("../models/Transaction");
+const crypto = require("crypto");
 
 class BlockchainService {
 	constructor() {
@@ -10,27 +10,30 @@ class BlockchainService {
 	// Tạo medical record trên blockchain
 	async createMedicalRecord(recordData) {
 		try {
-			// Tạo block trên blockchain
+			const recordHash = this.generateRecordHash(recordData);
+
+			// Tạo block data
 			const blockData = {
-				type: "create_record",
+				type: "CREATE",
 				recordId: recordData.recordId,
 				patientId: recordData.patientId,
 				doctorId: recordData.doctorId,
-				timestamp: Date.now(),
-				hash: this.generateRecordHash(recordData),
+				diagnosis: recordData.diagnosis,
+				treatment: recordData.treatment,
+				hash: recordHash,
 			};
 
+			// Thêm vào blockchain
 			const newBlock = this.blockchain.addBlock(blockData);
 
-			// Lưu transaction vào database
-			const transaction = new BlockchainTransaction({
-				transactionHash: newBlock.hash,
+			// Lưu transaction
+			const transaction = new Transaction({
+				txHash: newBlock.hash,
 				blockNumber: newBlock.index,
+				initiatorId: recordData.doctorId,
 				recordId: recordData.recordId,
-				action: "create_record",
-				fromAddress: recordData.doctorWallet || "system",
-				status: "confirmed",
-				blockTimestamp: new Date(newBlock.timestamp),
+				action: "CREATE",
+				status: "SUCCESS",
 			});
 
 			await transaction.save();
@@ -38,39 +41,35 @@ class BlockchainService {
 			return {
 				success: true,
 				blockHash: newBlock.hash,
-				blockIndex: newBlock.index,
-				transactionHash: newBlock.hash,
+				blockNumber: newBlock.index,
+				recordHash: recordHash,
 			};
 		} catch (error) {
-			console.error(
-				"Error creating medical record on blockchain:",
-				error
-			);
+			console.error("Error creating medical record:", error);
 			throw error;
 		}
 	}
 
-	// Cập nhật quyền truy cập
-	async updateAccess(recordId, accessData) {
+	// Cập nhật medical record
+	async updateMedicalRecord(recordData, initiatorId) {
 		try {
+			const updatedHash = this.generateRecordHash(recordData);
+
 			const blockData = {
-				type: "update_access",
-				recordId: recordId,
-				accessData: accessData,
-				timestamp: Date.now(),
+				type: "UPDATE",
+				recordId: recordData.recordId,
+				updatedHash: updatedHash,
 			};
 
 			const newBlock = this.blockchain.addBlock(blockData);
 
-			const transaction = new BlockchainTransaction({
-				transactionHash: newBlock.hash,
+			const transaction = new Transaction({
+				txHash: newBlock.hash,
 				blockNumber: newBlock.index,
-				recordId: recordId,
-				action: "grant_access",
-				fromAddress: accessData.granterWallet || "system",
-				toAddress: accessData.granteeWallet || "unknown",
-				status: "confirmed",
-				blockTimestamp: new Date(newBlock.timestamp),
+				initiatorId: initiatorId,
+				recordId: recordData.recordId,
+				action: "UPDATE",
+				status: "SUCCESS",
 			});
 
 			await transaction.save();
@@ -78,93 +77,101 @@ class BlockchainService {
 			return {
 				success: true,
 				blockHash: newBlock.hash,
-				transactionHash: newBlock.hash,
+				blockNumber: newBlock.index,
+				recordHash: updatedHash,
 			};
 		} catch (error) {
-			console.error("Error updating access on blockchain:", error);
+			console.error("Error updating medical record:", error);
 			throw error;
 		}
 	}
 
-	// Verify record integrity
-	async verifyRecord(recordId, recordHash) {
-		try {
-			const blocks = this.blockchain.getBlocksByRecordId(recordId);
-
-			if (blocks.length === 0) {
-				return {
-					valid: false,
-					message: "Record not found on blockchain",
-				};
-			}
-
-			// Kiểm tra hash của record
-			const latestBlock = blocks[blocks.length - 1];
-			const isHashValid = latestBlock.data.hash === recordHash;
-
-			// Kiểm tra tính toàn vẹn của blockchain
-			const isChainValid = this.blockchain.isChainValid();
-
-			return {
-				valid: isHashValid && isChainValid,
-				blockHash: latestBlock.hash,
-				blockIndex: latestBlock.index,
-				message:
-					isHashValid && isChainValid
-						? "Record is valid"
-						: "Record integrity compromised",
-			};
-		} catch (error) {
-			console.error("Error verifying record:", error);
-			throw error;
-		}
-	}
-
-	// Generate hash cho medical record
+	// Generate hash
 	generateRecordHash(recordData) {
-		const crypto = require("crypto");
 		const dataString = JSON.stringify({
 			recordId: recordData.recordId,
 			patientId: recordData.patientId,
+			doctorId: recordData.doctorId,
 			diagnosis: recordData.diagnosis,
-			treatment: recordData.treatment,
-			recordDate: recordData.recordDate,
+			treatment: recordData.treatment || "",
 		});
 
 		return crypto.createHash("sha256").update(dataString).digest("hex");
 	}
 
-	// Get blockchain info
-	getBlockchainInfo() {
+	// Verify record
+	async verifyRecord(recordId, expectedHash) {
+		const blocks = this.blockchain.getBlocksByRecordId(recordId);
+
+		if (blocks.length === 0) {
+			return { valid: false, message: "Record not found on blockchain" };
+		}
+		// console.log(blocks)
+
+		const latestBlock = blocks[blocks.length - 1];
+		const blockchainHash =
+			latestBlock.data.hash || latestBlock.data.updatedHash;
+		const isValid =
+			blockchainHash === expectedHash && this.blockchain.isChainValid();
+
 		return {
-			totalBlocks: this.blockchain.chain.length,
-			latestBlock: this.blockchain.getLatestBlock(),
-			isValid: this.blockchain.isChainValid(),
-			difficulty: this.blockchain.difficulty,
+			valid: isValid,
+			blockHash: latestBlock.hash,
+			message: isValid ? "Record verified" : "Record invalid",
 		};
 	}
 
-	// Get transaction history for a record
-	async getRecordHistory(recordId) {
-		try {
-			const blocks = this.blockchain.getBlocksByRecordId(recordId);
-			const transactions = await BlockchainTransaction.find({
-				recordId,
-			}).sort({ createdAt: -1 });
+	// Get blockchain info
+	getBlockchainInfo() {
+		return this.blockchain.getChainInfo();
+	}
 
-			return {
-				blocks: blocks,
-				transactions: transactions,
-				totalTransactions: transactions.length,
-			};
-		} catch (error) {
-			console.error("Error getting record history:", error);
-			throw error;
-		}
+	// Get record history
+	async getRecordHistory(recordId) {
+		const blocks = this.blockchain.getBlocksByRecordId(recordId);
+		const transactions = await Transaction.find({ recordId })
+			.populate("initiatorId", "name email")
+			.sort({ createdAt: -1 });
+
+		return {
+			blocks: blocks,
+			transactions: transactions,
+			total: blocks.length,
+		};
 	}
 }
 
-// Singleton instance
 const blockchainService = new BlockchainService();
+const runService = async () => {
+	// Tạo record
+	const result = await blockchainService.createMedicalRecord({
+		recordId: "REC001",
+		patientId: "688439568d6ceedea41270b2",
+		doctorId: "688439568d6ceedea41270b2",
+		diagnosis: "Cảm cúm",
+		treatment: "Nghỉ ngơi và uống thuốc",
+	});
+
+	// Update record
+	// const updateResult = await blockchainService.updateMedicalRecord(
+	// 	{
+	// 		recordId: "REC001",
+	// 		diagnosis: "Cảm cúm nặng",
+	// 	},
+	// 	"688439568d6ceedea41270b2"
+	// );
+
+	// Verify record
+	// const verification = await blockchainService.verifyRecord(
+	// 	"REC001",
+	// 	"f4667982e3cbca1ef973e66057a6176111e415acab858d1fa4734171213281aa"
+	// );
+
+	// Get blockchain info
+	const info = blockchainService.getBlockchainInfo();
+	console.log("Create Result:", result);
+	// console.log("Verification Result:", verification);
+	console.log("Blockchain Info:", info);
+};
 
 module.exports = blockchainService;

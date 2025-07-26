@@ -1,0 +1,41 @@
+[
+  {
+    "index": 0,
+    "previousHash": "0",
+    "timestamp": 1753550761310,
+    "data": {
+      "type": "GENESIS"
+    },
+    "hash": "28d97d379739b700b6a1c50427a9d4d748e2a0e50c6d794595b39dc1fb81b299"
+  },
+  {
+    "index": 1,
+    "previousHash": "28d97d379739b700b6a1c50427a9d4d748e2a0e50c6d794595b39dc1fb81b299",
+    "timestamp": 1753550761313,
+    "data": {
+      "type": "CREATE",
+      "recordId": "REC001",
+      "patientId": "688439568d6ceedea41270b2",
+      "doctorId": "688439568d6ceedea41270b2",
+      "diagnosis": "Cảm cúm",
+      "treatment": "Nghỉ ngơi và uống thuốc",
+      "hash": "1afb6be0e6327db0f6138d9e097677f32155b8294cffbbb106a6df33c2ccd3a5"
+    },
+    "hash": "c36002fe782473b14970a4d9dda310a58ce86b1d82af731fae99077d88429305"
+  },
+  {
+    "index": 2,
+    "previousHash": "c36002fe782473b14970a4d9dda310a58ce86b1d82af731fae99077d88429305",
+    "timestamp": 1753550776888,
+    "data": {
+      "type": "CREATE",
+      "recordId": "REC001",
+      "patientId": "688439568d6ceedea41270b2",
+      "doctorId": "688439568d6ceedea41270b2",
+      "diagnosis": "Cảm cúm",
+      "treatment": "Nghỉ ngơi và uống thuốc",
+      "hash": "1afb6be0e6327db0f6138d9e097677f32155b8294cffbbb106a6df33c2ccd3a5"
+    },
+    "hash": "d7dde6266da616f79f54a54b11b0e609c1f5242f559ce5e0be689ef57514a8aa"
+  }
+]
